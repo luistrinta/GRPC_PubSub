@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "service";
+option java_outer_classname = "ProjectProto";
+option objc_class_prefix = "PP";
+
+package project;
+
+// The calculator service definition.
+service Project {
+  // Floating Point Arithmetic
+
+  rpc publish (stream Message) returns (Message) {}
+  rpc publishTo (Tag) returns (Message){}
+  rpc subscribeTo (Tag) returns (stream Message) {}
+  rpc getTagList (Message) returns (stream Tag){}
+
+}
+
+//Te message object used to comunicate with subscriber
+message Message {
+  string message = 1;
+  string tag = 2;
+  //string ID = 3;
+  //string timestamp =4;
+}
+
+// The tag used by the subscriber
+message Tag {
+  string tag = 1;
+}
