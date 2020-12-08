@@ -15,7 +15,7 @@ service Project {
   rpc publishTo (Tag) returns (Message){}
   rpc subscribeTo (Tag) returns (stream Message) {}
   rpc getTagList (Message) returns (stream Tag){}
-
+  rpc sendAliveSignal (Message) returns (Message){}
 }
 
 //Te message object used to comunicate with subscriber

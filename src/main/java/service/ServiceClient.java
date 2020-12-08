@@ -1,17 +1,17 @@
 package service;
+
 import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
-import java.sql.SQLOutput;
-import java.util.Iterator;
-import java.util.Scanner;
-import java.util.concurrent.TimeUnit;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Stream;
+
+
 
 public class ServiceClient {
     private static final Logger logger = Logger.getLogger(ServiceClient.class.getName());
@@ -27,56 +27,59 @@ public class ServiceClient {
         stub = ProjectGrpc.newStub(channel);
     }
 
-    public void subscribeTag(String tag ){
+    //Grpc method calls
+    public void subscribeTag(String tag) {
         Tag requestTag = Tag.newBuilder().setTag(tag).build();
         Iterator<Message> receivedMessages;
 
-        try{
+        try {
             receivedMessages = blockingStub.subscribeTo(requestTag);
-        }catch(StatusRuntimeException e){
+        } catch (StatusRuntimeException e) {
             logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
             return;
         }
 
-        while(receivedMessages.hasNext()){
+        while (receivedMessages.hasNext()) {
             System.out.println(receivedMessages.next().getMessage());
         }
     }
 
-    public void getTagList(){
-      Message request = Message.newBuilder().setMessage("taglist request").build();
-      Iterator<Tag> response;
-
-      response = blockingStub.getTagList(request);
-      int i =1;
-      while(response.hasNext()){
-          System.out.println(i+"."+response.next().getTag());
-          i++;
-      }
+    public void getTagList() {
+        Message request = Message.newBuilder().setMessage("taglist request").build();
+        Iterator<Tag> response;
+        response = blockingStub.getTagList(request);
+        int i = 1;
+        while (response.hasNext()) {
+            String resp = response.next().getTag();
+            // System.out.println(i + "." + resp);
+            i++;
+            tagList.add(resp);
+        }
     }
 
-    public void chooseTag(String tagname){
+    public void chooseTag(String tagname) {
         Tag myTag = Tag.newBuilder().setTag(tagname).build();
         Message response;
-
         response = blockingStub.publishTo(myTag);
     }
 
-    public void startPublishing(String tag){
+    public void startPublishing(String tag) {
         Scanner scanner = new Scanner(System.in);
         StreamObserver<Message> so = stub.publish(null);
-        while(true){
+        while (true) {
             String message = scanner.nextLine();
             Message m = Message.newBuilder().setMessage(message).setTag(tag).build();
             so.onNext(m);
         }
     }
 
+    private static List<String> tagList = new ArrayList<>();
+
     public static void main(String[] args) throws InterruptedException {
         Scanner scanner = new Scanner(System.in);
-        System.out.println("Please choose a type of client:\npub -> publisher   sub -> subscriber");
+        System.out.println("Please choose a type of client:\n1.pub -> publisher\n2.sub -> subscriber\n");
         String typeOfUser = scanner.next();
-        System.out.println(typeOfUser);
+
         // Access a service running on the local machine on port 50051
         String target = "localhost:50052";
         if (args.length > 0) {
@@ -88,37 +91,67 @@ public class ServiceClient {
         // them until the application shuts down.
         ManagedChannel channel = ManagedChannelBuilder.forTarget(target).usePlaintext().build();
 
-
-        //Subscriber uses subscribeTag and ViewTagList
-        if("sub".equals(typeOfUser) || "subscriber".equals(typeOfUser)){
-            ServiceClient subscriber = new ServiceClient(channel);
-            System.out.println("Please write down the tag you want to view:\n 1.View TagList");
-            String option = scanner.next();
-            switch(option){
-                case "1":
-                    System.out.println("Tag List:");
-                    subscriber.getTagList();
-                    break;
-                default:
-                    subscriber.subscribeTag(option);
-                    break;
-
-
-
-            }
-        }
-        //Publisher uses PublishMessageTo
-        if("pub".equals(typeOfUser) || "publisher".equals(typeOfUser)){
-            ServiceClient publisher = new ServiceClient(channel);
-            System.out.println("Please insert your tag:");
-            String myTag = scanner.next();
-            publisher.chooseTag(myTag);
-            System.out.println("Your Tag is "+ myTag);
-
-            publisher.startPublishing(myTag);
-
-
+        switch (typeOfUser) {
+            case "sub":
+            case "subscriber":
+            case "2":
+                ServiceClient subscriber = new ServiceClient(channel);
+                subscriber.getTagList();
+                System.out.println("Welcome subscriber!\nChoose one of the options:");
+                while (true) {
+                    System.out.println("1.See Tag List\n2.Subscribe to tag");
+                    String second = scanner.next();
+                    if (second.equals("1")) {
+                        int i = 1;
+                        for (String s : tagList) {
+                            System.out.println(i + "." + s);
+                            i++;
+                        }
+                        System.out.println();
+                    } else if (second.equals("2")) {
+                        System.out.println("Insert tag name:");
+                        String option = scanner.next();
+                        if (!(tagList.contains(option)))
+                            System.out.println("Tagname incorrect");
+                        else {
+                            subscriber.subscribeTag(option);
+                            break;
+                        }
+                    } else System.out.println("Invalid option!");
+                }
+                break;
+            case "pub":
+            case "publisher":
+            case "1":
+                ServiceClient publisher = new ServiceClient(channel);
+                publisher.getTagList();
+                System.out.println("Welcome subscriber!\nChoose one of the options:");
+                while (true) {
+                    System.out.println("1.See Tag List\n2.Subscribe to tag");
+                    String second = scanner.next();
+                    if (second.equals("1")) {
+                        int i = 1;
+                        for (String s : tagList) {
+                            System.out.println(i + "." + s);
+                            i++;
+                        }
+                        System.out.println("\n");
+                    } else if (second.equals("2")) {
+                        String myTag = "None";
+                        while (!(tagList.contains(myTag))) {
+                            System.out.println("Insert tag name:");
+                            myTag = scanner.next();
+                            if (!(tagList.contains(myTag)))
+                                System.out.println("Tagname incorrect");
+                            else {
+                                publisher.chooseTag(myTag);
+                            }
+                        }
+                        publisher.startPublishing(myTag);
+                        break;
+                    }
+                }
+                break;
         }
     }
-
 }
