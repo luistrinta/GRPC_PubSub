@@ -16,7 +16,6 @@ import java.util.logging.Logger;
 public class ServiceServer {
     public static Random rand = new Random();
     private static final Logger logger = Logger.getLogger(ServiceServer.class.getName());
-
     private static MyDB mongodb;
     private Server server;
 
@@ -30,7 +29,6 @@ public class ServiceServer {
 
         //iniciamos a base de dados em conjunto com o servidor
         mongodb = new MyDB();
-
         logger.info("Server started, listening on " + port);
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -64,6 +62,7 @@ public class ServiceServer {
 
     //HashMap de tags para subscribers, visto que cada publisher tem apenas 1 tag.
     public static HashMap<String, List<StreamObserver<Message>>> pub_to_sub = new HashMap();
+
 
     //Insere tags necessárias ao mapa
     public static void populate_Map(HashMap<String, List<StreamObserver<Message>>> map) {
@@ -111,7 +110,7 @@ public class ServiceServer {
                     List<StreamObserver<Message>> valid_users = new ArrayList<>(tag_users);
 
                     //id da mensagem(gerado aleatóriamente)
-                    int id = rand.nextInt(100000);
+                    int id = rand.nextInt(100000) + 1;//Para o id 0 estar reservado para o KeepAlive
 
                     //Adicionamos a mensagem á base de dados
                     mongodb.addMsg(value.getTag(), value.getMessage(), id, time_stamp);
@@ -177,7 +176,6 @@ public class ServiceServer {
 
         @Override // Adicionamos o stream observer ao sua respectiva tag , caso esta seja válida
         public void subscribeTo(Tag request, StreamObserver<Message> responseObserver) {
-
             //Verificamos se o keyset contem a tag escrita, se contiver procede , caso não contenha dá erro
             if (!pub_to_sub.containsKey(request.getTag())) {
                 responseObserver.onNext(Message.newBuilder().setMessage("Invalid tag , please try again").build());
@@ -188,19 +186,57 @@ public class ServiceServer {
                 List<StreamObserver<Message>> tag_members = pub_to_sub.get(request.getTag());
                 tag_members.add(responseObserver);
                 pub_to_sub.put(request.getTag(), tag_members);
+
                 try {
-                    responseObserver.onNext(Message.newBuilder().setMessage("You are now in tag " + request.getTag()).setStamp("server").build());
+                    responseObserver.onNext(Message.newBuilder().setMessage("You are now in tag " + request.getTag()).setStamp("server").setId(1).build());
                     sendOldMessages(request.getTag(), responseObserver);
+
+                    //Adicionamos o sinal de keepAlive com multithreading
+                    Thread keepAlive = new Thread(new ServiceImpl.KeepAliveThread());
+                    keepAlive.start();
                 } catch (Exception e) {
                     logger.log(Level.WARNING, "Error while processing data");
                 }
             }
         }
 
+        //Enviamos as mensagens antigas ainda válidas
         private static void sendOldMessages(String tag, StreamObserver<Message> observer) {
             for (Document d : mongodb.getMessageList(tag)) {
                 String correct_time = convertTimeStamp((long) d.get("timestamp"));
-                observer.onNext(Message.newBuilder().setMessage((String) d.get("content")).setStamp(correct_time).build());
+                observer.onNext(Message.newBuilder().setMessage((String) d.get("content")).setStamp(correct_time).setId((int) d.get("id")).build());
+            }
+        }
+
+        private static class KeepAliveThread implements Runnable {
+            public void run() {
+                long S = 10;
+                try {
+                    while (true) {
+                        try {
+                            //Eviamos o nosso sinal de keep alive de 10 em 10 segundos
+                            Thread.sleep(1000 * S);
+                            for (String key : pub_to_sub.keySet()) {
+                                //Listas a utilizar
+                                List<StreamObserver<Message>> tag_users = pub_to_sub.get(key);
+                                List<StreamObserver<Message>> valid_users = new ArrayList<>(tag_users);
+
+                                for (int i = 0; i < tag_users.size(); i++) {
+                                    try {
+                                        (tag_users.get(i)).onNext(Message.newBuilder().setId(0).build());
+                                    } catch (RuntimeException e) {
+                                        valid_users.remove(i);
+                                    }
+                                }
+                                pub_to_sub.put(key, valid_users);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
     }

@@ -27,7 +27,7 @@ public class ServiceSubscriber {
         stub = ProjectGrpc.newStub(channel);
     }
 
-    //Grpc method calls
+    //Métodos do GRPC
 
     //Subscrever a tag que escolhemos com o subscriber
     public void subscribeTag(String tag) {
@@ -44,7 +44,8 @@ public class ServiceSubscriber {
         //Após inscrevermo-nos numa tag ficamos á espera de mensagens daquela tag
         while (receivedMessages.hasNext()) {
             Message m = receivedMessages.next();
-            System.out.println(m.getStamp() + ": " + m.getMessage());
+            if(m.getId() != 0)
+                System.out.println(m.getStamp() + ": " + m.getMessage());
         }
     }
 
@@ -55,16 +56,6 @@ public class ServiceSubscriber {
         while (response.hasNext()) {
             String resp = response.next().getTag();
             tagList.add(resp);
-        }
-    }
-
-
-    public void signalKeepAlive(String tag){
-        try {
-            final Message message = blockingStub.sendAliveSignal(Message.newBuilder().setTag(tag).build());
-        } catch (StatusRuntimeException e) {
-            logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
-            return;
         }
     }
 
@@ -102,8 +93,7 @@ public class ServiceSubscriber {
                         if (!(tagList.contains(option)))
                             System.out.println("Tagname incorrect");
                         else {
-                            Thread keepAlive = new Thread(new KeepAliveThread(subscriber,option));
-                            keepAlive.start();
+                            //Thread criada para fazermos o keepAlive
                             subscriber.subscribeTag(option);
                             break;
                         }
@@ -111,27 +101,5 @@ public class ServiceSubscriber {
                 }
 
 
-    }
-
-    static class KeepAliveThread implements Runnable
-    {   ServiceSubscriber subscriber;
-        String tag;
-        public KeepAliveThread(ServiceSubscriber subscriber,String tag) {
-            this.subscriber = subscriber;
-            this.tag = tag;
-        }
-
-        public void run()
-        {
-            try
-            {
-                subscriber.signalKeepAlive(tag);
-            }
-            catch (Exception e)
-            {
-                // Throwing an exception
-                System.out.println ("Exception is caught");
-            }
-        }
     }
 }
