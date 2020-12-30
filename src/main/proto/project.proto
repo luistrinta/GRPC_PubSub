@@ -22,8 +22,8 @@ service Project {
 message Message {
   string message = 1;
   string tag = 2;
-  //string ID = 3;
-  //string timestamp =4;
+  int32 id = 3;
+  string stamp =4;
 }
 
 // The tag used by the subscriber
